@@ -5,8 +5,6 @@ using System.Numerics;
 
 internal class Program
 {
-
-
     private static void Main(string[] args)
     {
 
@@ -102,7 +100,7 @@ internal class Program
                     {
                         byte[] data = Encoding.UTF8.GetBytes($" {DateTime.Now} "); //uloží data do bytového pole (čas)
                         stream.Write(data, 0, data.Length); //odešle zprávu na tcp server
-                        Console.WriteLine($" \"Odeslána zpráva: \" {DateTime.Now} ");
+                        Console.WriteLine($" Odeslána zpráva: {DateTime.Now} ");
 
                         Thread.Sleep(period * 1000); //uspí vlákno o délce dané periody
                     }
@@ -118,7 +116,7 @@ internal class Program
                     {
                         byte[] data = Encoding.UTF8.GetBytes($" {DateTime.Now} ");
                         udpClient.Send(data, data.Length, endPoint);
-                        Console.WriteLine($" \"Odeslána zpráva: \" {DateTime.Now} ");
+                        Console.WriteLine($"Odeslána zpráva: {DateTime.Now} ");
                         Thread.Sleep(period * 1000);
                     }
                 }
@@ -132,7 +130,7 @@ internal class Program
             {
                 TcpListener listener = new TcpListener(IPAddress.Any, port); //deklarace poslouchání na daném portu a jakékoli ip adresy
                 listener.Start();
-                Console.WriteLine("Poslouchám tcp připojení...");
+                Console.WriteLine("Poslouchám (TCP)...");
 
                 while (true)
                 {
@@ -144,13 +142,24 @@ internal class Program
                     while ((bytesRead = stream.Read(buffer, 0, buffer.Length)) != 0) //čte dokud nevyprázdní buffer
                     {
                         string receivedData = Encoding.UTF8.GetString(buffer, 0, bytesRead);
-                        Console.WriteLine($"Received data: {receivedData}"); //vypíše příjmuté data
+                        Console.WriteLine($"Přijmutá zpráva : {receivedData}"); //vypíše příjmuté data
                     }
                 }
             }
             else
             { //pužití UDP protocolu
+                using (UdpClient udpListener = new UdpClient(port))
+                {
+                    Console.WriteLine("Poslouchám (UDP)...");
 
+                    while (true)
+                    {
+                        IPEndPoint endPoint = new IPEndPoint(IPAddress.Any, port);
+                        byte[] data = udpListener.Receive(ref endPoint);
+                        string receivedData = Encoding.UTF8.GetString(data);
+                        Console.WriteLine($"Přijmutá zpráva: {receivedData}");
+                    }
+                }
             }
         }
     }
