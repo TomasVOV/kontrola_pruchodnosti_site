@@ -1,0 +1,1 @@
+# kontrola_pruchodnosti_site
