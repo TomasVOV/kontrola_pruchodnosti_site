@@ -1,6 +1,6 @@
 # Network Connectivity Tester
 
-Tento projekt je konzolová aplikace v, která umožňuje testování síťové konektivity pomocí TCP a UDP.
+Tento projekt je konzolová aplikace, která umožňuje testování síťové konektivity pomocí TCP a UDP.
 
 ## Funkce
 - **Režim vysílání**: Odesílání zpráv na zvolený port protokolem TCP nebo UDP.
