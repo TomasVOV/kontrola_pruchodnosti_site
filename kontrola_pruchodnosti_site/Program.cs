@@ -80,7 +80,7 @@ internal class Program
     static string GetMode()
     {
         Console.WriteLine("Pro vysílání napište 1, pro naslouchání 2: ");
-        string userInput = Console.ReadLine();
+        string? userInput = Console.ReadLine();
 
         while (userInput != "1" && userInput != "2")
         {
@@ -94,12 +94,12 @@ internal class Program
     static string GetProtocol()
     {
         Console.WriteLine("Zvolte protokol (TCP/UDP), pro oba napište 2: ");
-        string userInput = Console.ReadLine().ToUpper();
+        string? userInput = Console.ReadLine()?.ToUpper();
 
         while (userInput != "TCP" && userInput != "UDP" && userInput != "2")
         {
             Console.WriteLine("Neplatný protokol. Zadejte TCP, UDP nebo 2: ");
-            userInput = Console.ReadLine().ToUpper();
+            userInput = Console.ReadLine()?.ToUpper();
         }
         return userInput;
     }
@@ -108,7 +108,7 @@ internal class Program
     static int GetValidPeriod(string message, int defaultValue = -1)
     {
         Console.WriteLine(message);
-        string userInput = Console.ReadLine();
+        string? userInput = Console.ReadLine();
 
         while (true)
         {
@@ -132,10 +132,17 @@ internal class Program
     static int[] GetValidPort()
     {
         Console.WriteLine("Zadejte port nebo interval (a-b): ");
-        string userInput = Console.ReadLine();
+        string? userInput = Console.ReadLine();
 
         while (true)
         {
+            if (string.IsNullOrWhiteSpace(userInput))
+            {
+                Console.WriteLine("Neplatný port, zkuste to znovu.");
+                userInput = Console.ReadLine();
+                continue;
+            }
+
             string[] inputParts = userInput.Split('-');
 
             // Pokud je vstup jedno číslo, vrátí se pole s jedním prvkem
@@ -172,7 +179,7 @@ internal class Program
     static string GetValidIPAddress()
     {
         Console.WriteLine("Zadejte IP adresu: ");
-        string userInput = Console.ReadLine();
+        string? userInput = Console.ReadLine();
 
         // Kontrola, zda je vstup platná IP adresa
         while (!IPAddress.TryParse(userInput, out _))
