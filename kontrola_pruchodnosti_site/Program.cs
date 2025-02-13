@@ -273,6 +273,7 @@ internal class Program
     private static void UdpListening(int[] ports)
     {
         // Pro každý port se vytvoří nové UDP naslouchání
+        Console.WriteLine("yes");
         foreach (int port in ports)
         {
             // Vytvoření vlákna pro naslouchání
@@ -298,6 +299,7 @@ internal class Program
                     Log.Error(ex, "(UDP) Chyba při naslouchání na portu {Port}", port);
                 }
             });
+            listenerThread.Start();
         }
     }
 }
