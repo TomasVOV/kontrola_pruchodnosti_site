@@ -273,7 +273,6 @@ internal class Program
     private static void UdpListening(int[] ports)
     {
         // Pro každý port se vytvoří nové UDP naslouchání
-        Console.WriteLine("yes");
         foreach (int port in ports)
         {
             // Vytvoření vlákna pro naslouchání
