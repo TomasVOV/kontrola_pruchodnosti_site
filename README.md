@@ -1,4 +1,4 @@
-# Network Connectivity Tester
+# Kontrola průchodnosti sítě
 
 Tento projekt je konzolová aplikace, která umožňuje testování síťové konektivity pomocí TCP a UDP.
 
