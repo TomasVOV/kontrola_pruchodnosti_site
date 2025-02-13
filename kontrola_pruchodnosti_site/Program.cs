@@ -1,348 +1,303 @@
 ﻿using System;
 using System.IO;
-using System.Net.Sockets;
 using System.Net;
+using System.Net.Sockets;
 using System.Text;
 using System.Threading;
+using Serilog;
+
 
 internal class Program
 {
-    private static void Main(string[] args)
+    private static void Main()
     {
-        try //načítání vstupů od uživatele
-        {
-            Console.WriteLine("Pro vysílání napište 1, pro naslouchání 2: ");
-            string mode = Console.ReadLine();
-            while (mode != "1" && mode != "2") //zajistění správného vstupu módu
-            {
-                Console.WriteLine("Neplatný vstup. Zadejte 1 nebo 2: ");
-                mode = Console.ReadLine();
-            }
+        // Konfigurace logování
+        Log.Logger = new LoggerConfiguration()
+            .WriteTo.Console()
+            .WriteTo.File("log.txt", rollingInterval: RollingInterval.Day)
+            .CreateLogger();
 
-            Console.WriteLine("Zvolte protokol (TCP/UDP), pro oba napistě 2: ");
-            string protocol = Console.ReadLine().ToUpper();
-            while (protocol != "TCP" && protocol != "UDP" && protocol != "2") //zajistění správného vstupu u protocolu
-            {
-                Console.WriteLine("Neplatný protokol. Zadejte TCP nebo UDP: ");
-                protocol = Console.ReadLine().ToUpper();
-            }
+        
+        try
+        {   // Získání vstupních hodnot
+            string selectedMode = GetMode();
+            string selectedProtocol = GetProtocol();
+            int[] selectedPorts = GetValidPort();
 
-            Console.WriteLine("Zadejte port nebo interval (a-b): ");
-            int[] port = GetValidPort(); //zavolání metody pro validaci portu
+            // Zpracování vstupních hodnot
+            if (selectedMode == "1")
+            {   
+                string targetIp = GetValidIPAddress();
+                int sendInterval = GetValidPeriod("Zadejte periodu v sekundách (výchozí 5): ", 5);
 
-            if (mode == "1")
-            {
-                Console.WriteLine("Zadejte IP adresu: ");
-                string ip = GetValidIPAddress(); //zavolání metody pro validaci ip adresy
-                Console.WriteLine("Zadejte periodu v sekundách (výchozí 5): ");
-                int period = GetValidNumber(5); //zavolání metody pro validaci čísla - periody
-                Sending(protocol, port, ip, period); //zavolání procedury pro vysílání
+                // Spuštění daného protokolu
+                if (selectedProtocol == "TCP")
+                {
+                    TcpSending(selectedPorts, targetIp, sendInterval);
+                }
+                else if (selectedProtocol == "UDP")
+                {
+                    UdpSending(selectedPorts, targetIp, sendInterval);
+                }
+                else
+                {
+                    // Spuštění obou protokolů za pomoci dvou vláken
+                    Thread tcpThread = new Thread(() => TcpSending(selectedPorts, targetIp, sendInterval));
+                    Thread udpThread = new Thread(() => UdpSending(selectedPorts, targetIp, sendInterval));
+                    tcpThread.Start();
+                    udpThread.Start();
+                }
             }
             else
             {
-                Listening(protocol, port); //zavolání procedury pro poslouchání
+                // Spuštění naslouchání na daných portech
+                if (selectedProtocol == "TCP")
+                {
+                    TcpListening(selectedPorts);
+                }
+                else if (selectedProtocol == "UDP")
+                {
+                    UdpListening(selectedPorts);
+                }
+                else
+                {
+                    // Spuštění obou protokolů za pomoci dvou vláken
+                    Thread tcpThread = new Thread(() => TcpListening(selectedPorts));
+                    Thread udpThread = new Thread(() => UdpListening(selectedPorts));
+                    tcpThread.Start();
+                    udpThread.Start();
+                }
             }
         }
         catch (Exception ex)
         {
-            LogMessage("Neočekávaná chyba: " + ex.Message);
+            Log.Error(ex, "Neočekávaná chyba");
             Console.WriteLine("Neočekávaná chyba: " + ex.Message);
         }
     }
 
-    //procedura určená k vysílání
-    static void Sending(string protocol, int[] port, string ip, int period)
+    // Metoda pro získání režimu
+    static string GetMode()
     {
-        try
-        {   //vysílání pomoci TCP
-            if (protocol == "TCP")
-            {
-                while (true)
-                {
-                    TcpSending(port, ip, period);   
-                }
-            }
-            else if (protocol == "UDP")
-            {
-                while (true)
-                {
-                    UdpSending(port, ip, period);
-                }
-            } 
-            else
-            {
-                while (true)
-                {
-                    TcpSending(port, ip, period);
-                    UdpSending(port, ip, period);
-                }
-            }
+        Console.WriteLine("Pro vysílání napište 1, pro naslouchání 2: ");
+        string userInput = Console.ReadLine();
 
-        }
-        catch (SocketException ex)
+        while (userInput != "1" && userInput != "2")
         {
-            Console.WriteLine("Chyba připojení: " + ex.Message);
+            Console.WriteLine("Neplatný vstup. Zadejte 1 nebo 2: ");
+            userInput = Console.ReadLine();
         }
+        return userInput;
     }
 
-
-
-    //procedura určená k poslouchání
-    static void Listening(string protocol, int[] port) 
+    //Metoda pro získání protokolu
+    static string GetProtocol()
     {
-        try
-        {   //poslouchání pomocí TCP
-            if (protocol == "TCP")
-            {
-                TcpListener listener = new TcpListener(IPAddress.Any, port); //inicializuje TCP listener, který poslouchá jakoukoli IP adresu na daném portu
-                listener.Start();
-                Console.WriteLine("Poslouchám (TCP)...");
-                LogMessage("Poslouchám (TCP)...");
+        Console.WriteLine("Zvolte protokol (TCP/UDP), pro oba napište 2: ");
+        string userInput = Console.ReadLine().ToUpper();
 
-                while (true)
-                {
-                    using (TcpClient client = listener.AcceptTcpClient()) //akceptuje žádost o připojení
-                    using (NetworkStream stream = client.GetStream())
-                    {
-                        byte[] buffer = new byte[1024];
-                        int bytesRead = stream.Read(buffer, 0, buffer.Length); //čte příjmutá data
-                        string receivedData = Encoding.UTF8.GetString(buffer, 0, bytesRead); //převede data do stringu
-                        string message = "Přijatá zpráva: " + receivedData;
-                        Console.WriteLine(message);
-                        LogMessage(message);
-                    }
-                }
-            } //poslouchání pomocí UDP
-            else if (protocol == "UDP")
-            {   
-                using (UdpClient udpListener = new UdpClient(port)) //inicializuje UDP listener, který poslouchá na daném portu
-                {
-                    Console.WriteLine("Poslouchám (UDP)...");
-                    LogMessage("Poslouchám (UDP)...");
-                    while (true)
-                    {
-                        IPEndPoint endPoint = new IPEndPoint(IPAddress.Any, port); //inicializace endpointu
-                        byte[] data = udpListener.Receive(ref endPoint); //vrací příjmutá data
-                        string receivedData = Encoding.UTF8.GetString(data); //převede data do stringu
-                        string message = "Přijatá zpráva: " + receivedData;
-                        Console.WriteLine(message);
-                        LogMessage(message);
-                    }
-                }
-            }
-            else
-            {
-                TcpListener listener = new TcpListener(IPAddress.Any, port); //inicializuje TCP listener, který poslouchá jakoukoli IP adresu na daném portu
-                listener.Start();
-                Console.WriteLine("Poslouchám (TCP/UDP)...");
-                LogMessage("Poslouchám (TCP/UDP)...");
-
-                while (true)
-                {
-                    using (UdpClient udpListener = new UdpClient(port)) //inicializuje UDP listener, který poslouchá na daném portu
-                    using (TcpClient client = listener.AcceptTcpClient()) //akceptuje žádost o připojení
-                    using (NetworkStream stream = client.GetStream())
-                    {
-                        byte[] buffer = new byte[1024];
-                        int bytesRead = stream.Read(buffer, 0, buffer.Length); //čte příjmutá data
-                        string receivedData = Encoding.UTF8.GetString(buffer, 0, bytesRead); //převede data do stringu
-                        string message = "Přijatá zpráva (TCP): " + receivedData;
-                        Console.WriteLine(message);
-                        LogMessage(message);
-
-                        IPEndPoint endPoint = new IPEndPoint(IPAddress.Any, port); //inicializace endpointu
-                        byte[] data = udpListener.Receive(ref endPoint); //vrací příjmutá data
-                        string receivedData1 = Encoding.UTF8.GetString(data); //převede data do stringu
-                        string message1 = "Přijatá zpráva (UDP): " + receivedData1;
-                        Console.WriteLine(message1);
-                        LogMessage(message1);
-
-                    }
-                }
-            }
-        }
-        catch (SocketException ex)
+        while (userInput != "TCP" && userInput != "UDP" && userInput != "2")
         {
-            LogMessage("Chyba sítě: " + ex.Message);
-            Console.WriteLine("Chyba sítě: " + ex.Message);
+            Console.WriteLine("Neplatný protokol. Zadejte TCP, UDP nebo 2: ");
+            userInput = Console.ReadLine().ToUpper();
         }
+        return userInput;
     }
-    //validace čísel - inputu
-    static int GetValidNumber(int defaultValue = -1)
+
+    // Metoda pro získání platného periody
+    static int GetValidPeriod(string message, int defaultValue = -1)
     {
-        int result;
+        Console.WriteLine(message);
+        string userInput = Console.ReadLine();
+
         while (true)
         {
-            string input = Console.ReadLine();
-            if (string.IsNullOrWhiteSpace(input) && defaultValue != -1) //jestli uživatel nezadá vstup, tak bude vrácena výchozí hodnota
+            // Pokud je vstup prázdný a je nastavena výchozí hodnota, vrátí se výchozí hodnota
+            if (string.IsNullOrWhiteSpace(userInput) && defaultValue != -1)
             {
                 return defaultValue;
             }
-            try    //kontrola zda se jedná o číslo větší než 0
+            // Pokud je vstup číslo větší než 0, vrátí se toto číslo
+            if (int.TryParse(userInput, out int validNumber) && validNumber > 0)
             {
-                result = int.Parse(input);
-                if (result > 0)
-                {
-                    return result;
-                }
+                return validNumber;
             }
-            catch
-            {
-                Console.WriteLine("Neplatné číslo, zkuste to znovu.");
-            }
+
+            Console.WriteLine("Neplatné číslo, zkuste to znovu.");
+            userInput = Console.ReadLine();
         }
     }
 
+    // Metoda pro získání platného portu nebo intervalu portů
     static int[] GetValidPort()
     {
-        int[] result = new int[2];
+        Console.WriteLine("Zadejte port nebo interval (a-b): ");
+        string userInput = Console.ReadLine();
 
         while (true)
         {
-            string[] input = Console.ReadLine().Split("-");
+            string[] inputParts = userInput.Split('-');
 
-            if (input.Length == 1)
+            // Pokud je vstup jedno číslo, vrátí se pole s jedním prvkem
+            if (inputParts.Length == 1 && int.TryParse(inputParts[0], out int singlePort))
             {
-                try
-                {
-                    result[0] = int.Parse(input[0]);
-                    return result;
-
-                }
-                catch
-                {
-                    Console.WriteLine("Neplatné číslo, zkuste to znovu.");
-                }
+                return new[] { singlePort };
             }
-            else if (input.Length == 2)
+
+            // Pokud jsou vstup dvě čísla, vrátí se pole s porty od-do
+            if (inputParts.Length == 2 && int.TryParse(inputParts[0], out int startPort) && int.TryParse(inputParts[1], out int endPort))
             {
-                try
+                // Pokud je začáteční port větší než koncový, vypíše se chyba
+                if (startPort > endPort)
                 {
-                    result[0] = int.Parse(input[0]);
-                    result[1] = int.Parse(input[1]);
-
-                    return result;
-
+                    Console.WriteLine("Začáteční port musí být menší nebo roven koncovému.");
+                    userInput = Console.ReadLine();
+                    continue;
                 }
-                catch
+                // 
+                int[] portArray = new int[endPort - startPort + 1];
+                for (int i = 0; i < portArray.Length; i++)
                 {
-                    Console.WriteLine("Neplatné číslo, zkuste to znovu.");
+                    portArray[i] = startPort + i;
                 }
-
+                return portArray;
             }
+
+            Console.WriteLine("Neplatný port, zkuste to znovu.");
+            userInput = Console.ReadLine();
         }
     }
-    //validace IP adresy
+
+    // Metoda pro získání platné IP adresy
     static string GetValidIPAddress()
     {
+        Console.WriteLine("Zadejte IP adresu: ");
+        string userInput = Console.ReadLine();
+
+        // Kontrola, zda je vstup platná IP adresa
+        while (!IPAddress.TryParse(userInput, out _))
+        {
+            Console.WriteLine("Neplatná IP adresa, zkuste to znovu.");
+            userInput = Console.ReadLine();
+        }
+        return userInput;
+    }
+
+    // Metoda pro vysílání TCP zpráv
+    static void TcpSending(int[] ports, string ipAddress, int intervalSeconds)
+    {
         while (true)
         {
-            string input = Console.ReadLine();
-            try
+            // Pro každý port se vytvoří nové TCP spojení a odešle se zpráva
+            foreach (int port in ports)
             {
-                if (IPAddress.TryParse(input, out _)) //zjistění jeslti se jedná o validní IP adresu
+                try
+                {   // Vytvoření TCP spojení a odeslání zprávy
+                    using (var tcpClient = new TcpClient(ipAddress, port))
+                    using (NetworkStream stream = tcpClient.GetStream())
+                    {
+                        byte[] messageData = Encoding.UTF8.GetBytes(DateTime.Now.ToString());
+                        stream.Write(messageData, 0, messageData.Length);
+                        Log.Information("(TCP) Odeslána zpráva na {Port}", port);
+                    }
+                }
+                catch (Exception ex)
                 {
-                    return input;
+                    Log.Warning(ex, "(TCP) Chyba na portu {Port}", port);
                 }
             }
-            catch
-            {
-                Console.WriteLine("Neplatná IP adresa, zkuste to znovu.");
-            }
-        }
-    }
-    //logování výstupů
-    static void LogMessage(string message)
-    {
-        string logFilePath = "log.txt";
-        using (StreamWriter writer = new StreamWriter(logFilePath, true))
-        {
-           writer.WriteLine(message);
+            Thread.Sleep(intervalSeconds * 1000);
         }
     }
 
-    static void TcpSending(int[] port, string ip, int period)
+    // Metoda pro vysílání UDP zpráv
+    static void UdpSending(int[] ports, string ipAddress, int intervalSeconds)
     {
-        using (var tcpClient = new TcpClient()) //inicializace TCP clienta za pomoci using kvůli likvidaci instance
+        // Vytvoření UDP klienta
+        using (var udpClient = new UdpClient())
         {
-            try
+            while (true)
             {
-                if (port[1] != 0)
+                // Pro každý port se odešle zpráva
+                foreach (int port in ports)
                 {
+                    IPEndPoint destinationEndPoint = new IPEndPoint(IPAddress.Parse(ipAddress), port);
+                    byte[] messageData = Encoding.UTF8.GetBytes(DateTime.Now.ToString());
+                    udpClient.Send(messageData, messageData.Length, destinationEndPoint);
+                    Log.Information("(UDP) Odeslána zpráva na {Port}", port);
+                }
+                Thread.Sleep(intervalSeconds * 1000);
+            }
+        }
+    }
+
+    // Metoda pro naslouchání TCP zpráv
+    private static void TcpListening(int[] ports)
+    {
+        // Pro každý port se vytvoří nové TCP naslouchání
+        foreach (int port in ports)
+        {
+            // Vytvoření vlákna pro naslouchání
+            Thread listenerThread = new Thread(() =>
+            {
+                try
+                {
+                    TcpListener listener = new TcpListener(IPAddress.Any, port);
+                    listener.Start();
+                    Log.Information("(TCP) Naslouchání na portu {Port}...", port);
+
                     while (true)
                     {
-                        for (int i = port[0]; i <= port[1]; i++)
+                        TcpClient client = listener.AcceptTcpClient();
+                        using (NetworkStream stream = client.GetStream())
                         {
-                            tcpClient.Connect(ip, i); //připojení clienta ke specifickému portu
-                            using (NetworkStream stream = tcpClient.GetStream()) //získání streamu na psaní dat
-                            {
-                                byte[] data = Encoding.UTF8.GetBytes(DateTime.Now.ToString()); // uloží data do bytového pole
-                                stream.Write(data, 0, data.Length); //pošle data
-                                Console.WriteLine("(TCP) Odeslána zpráva " + i + ":" + DateTime.Now);
-                            }
+                            byte[] buffer = new byte[1024];
+                            int bytesRead = stream.Read(buffer, 0, buffer.Length);
+                            string receivedMessage = Encoding.UTF8.GetString(buffer, 0, bytesRead);
+                            Log.Information("(TCP) Přijata zpráva na portu {Port}: {Message}", port, receivedMessage);
                         }
-                        Thread.Sleep(period * 1000); //uspí se na dobu periody
+                        client.Close();
                     }
                 }
-                else
+                catch (Exception ex)
                 {
-                    tcpClient.Connect(ip, port[0]); //připojení clienta ke specifickému portu
-                    using (NetworkStream stream = tcpClient.GetStream()) //získání streamu na psaní dat
-                    {
-                        while (true)
-                        {
-                            byte[] data = Encoding.UTF8.GetBytes(DateTime.Now.ToString()); // uloží data do bytového pole
-                            stream.Write(data, 0, data.Length); //pošle data
-                            Console.WriteLine("(TCP) Odeslána zpráva: " + DateTime.Now);
-                            Thread.Sleep(period * 1000); //uspí se na dobu periody
-                        }
-                    }
+                    Log.Error(ex, "(TCP) Chyba při naslouchání na portu {Port}", port);
                 }
-            }
-            catch (IOException ex)
-            {
-                Console.WriteLine("Spojení bylo přerušeno, pokusím se znovu připojit: " + ex.Message);
-                LogMessage("Spojení bylo přerušeno, pokusím se znovu připojit: " + ex.Message);
-                Thread.Sleep(period * 1000);
-            }
+            });
+
+            listenerThread.Start();
         }
     }
 
-    static void UdpSending(int[] port, string ip, int period)
+    // Metoda pro naslouchání UDP zpráv
+    private static void UdpListening(int[] ports)
     {
-        if (port[1] != 0)
+        // Pro každý port se vytvoří nové UDP naslouchání
+        foreach (int port in ports)
         {
-            using (var udpClient = new UdpClient()) //inicializace UDP clienta za pomoci using kvůli likvidaci instance
+            // Vytvoření vlákna pro naslouchání
+            Thread listenerThread = new Thread(() =>
             {
-                while (true)
+                try
                 {
-                    for (int i = port[0]; i <= port[1]; i++)
+                    using (UdpClient udpListener = new UdpClient(port))
                     {
-                        IPEndPoint endPoint = new IPEndPoint(IPAddress.Parse(ip), i); //inicializace endpoint
+                        IPEndPoint remoteEndPoint = new IPEndPoint(IPAddress.Any, port);
+                        Log.Information("(UDP) Naslouchání na portu {Port}...", port);
 
-                        byte[] data = Encoding.UTF8.GetBytes(DateTime.Now.ToString()); // uloží data do bytového pole
-                        udpClient.Send(data, data.Length, endPoint); //pošle data
-                        Console.WriteLine("Odeslána zpráva: " + DateTime.Now);
-                        Thread.Sleep(period * 1000); //uspí se na dobu periody   
-
+                        while (true)
+                        {
+                            byte[] receivedData = udpListener.Receive(ref remoteEndPoint);
+                            string receivedMessage = Encoding.UTF8.GetString(receivedData);
+                            Log.Information("(UDP) Přijata zpráva na portu {Port}: {Message}", port, receivedMessage);
+                        }
                     }
-                    Thread.Sleep(period * 1000); //uspí se na dobu periody
                 }
-            }
-        }
-        else
-        {
-            using (var udpClient = new UdpClient()) //inicializace UDP clienta za pomoci using kvůli likvidaci instance
-            {
-                IPEndPoint endPoint = new IPEndPoint(IPAddress.Parse(ip), port[0]); //inicializace endpoint
-                while (true)
+                catch (Exception ex)
                 {
-                    byte[] data = Encoding.UTF8.GetBytes(DateTime.Now.ToString()); // uloží data do bytového pole
-                    udpClient.Send(data, data.Length, endPoint); //pošle data
-                    Console.WriteLine("Odeslána zpráva: " + DateTime.Now);
-                    Thread.Sleep(period * 1000); //uspí se na dobu periody
+                    Log.Error(ex, "(UDP) Chyba při naslouchání na portu {Port}", port);
                 }
-            }
+            });
         }
     }
 }
