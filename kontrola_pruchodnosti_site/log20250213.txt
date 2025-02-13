@@ -1,4 +1,0 @@
-2025-02-13 14:04:47.856 +01:00 [INF] (UDP) Odeslána zpráva na 5000
-2025-02-13 14:04:52.893 +01:00 [INF] (UDP) Odeslána zpráva na 5000
-2025-02-13 14:04:57.912 +01:00 [INF] (UDP) Odeslána zpráva na 5000
-2025-02-13 14:05:02.925 +01:00 [INF] (UDP) Odeslána zpráva na 5000
