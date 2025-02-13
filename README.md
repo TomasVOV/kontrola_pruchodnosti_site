@@ -6,7 +6,7 @@ Tento projekt je konzolová aplikace, která umožňuje testování síťové ko
 - **Režim vysílání**: Odesílání zpráv na zvolený port protokolem TCP nebo UDP.
 - **Režim naslouchání**: Naslouchání příchozím zprávám na daných portech.
 - **Podpora více portů**: Možnost zadání jednoho portu nebo intervalu (např. 5000-5010).
-- **Podpora více protokolů**: TCP, UDP nebo oba současně.
+- **Podpora obou protokolů současně**: TCP a UDP současně.
 - **Logování**: Používá knihovnu Serilog pro výstupy do konzole a logovacího souboru (`log.txt`).
 
 ## Požadavky
